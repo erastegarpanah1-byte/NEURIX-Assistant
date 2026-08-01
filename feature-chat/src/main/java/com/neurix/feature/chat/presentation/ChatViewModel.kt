@@ -8,9 +8,10 @@ import com.neurix.core.ai.domain.GetConversationsUseCase
 import com.neurix.core.ai.domain.GetMessagesUseCase
 import com.neurix.core.ai.domain.SaveAssistantResponseUseCase
 import com.neurix.core.ai.domain.SendMessageUseCase
-import com.neurix.core.ai.domain.model.ChatMessage as DomainChatMessage
+import com.neurix.core.ai.domain.model.ChatMessage as Dm
 import com.neurix.core.ai.domain.model.MessageRole
 import com.neurix.core.common.BaseViewModel
+import com.neurix.core.common.NetworkMonitor
 import com.neurix.core.common.Result
 import com.neurix.core.speech.SpeechManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -26,27 +27,19 @@ class ChatViewModel @Inject constructor(
     private val createConversationUseCase: CreateConversationUseCase,
     private val deleteConversationUseCase: DeleteConversationUseCase,
     private val actionEngine: ActionEngine,
-    private val speechManager: SpeechManager
-) : BaseViewModel<ChatState, ChatIntent, ChatEffect>(
-    ChatState()
-) {
+    private val speechManager: SpeechManager,
+    private val networkMonitor: NetworkMonitor
+) : BaseViewModel<ChatState, ChatIntent, ChatEffect>(ChatState()) {
 
-    companion object {
-        private const val DEFAULT_MODEL = "openai/gpt-4o-mini"
-    }
+    companion object { private const val MODEL = "openai/gpt-4o-mini" }
 
     init {
         viewModelScope.launch {
-            getConversationsUseCase().collect { conversations ->
-                setState {
-                    copy(conversations = conversations.map { conv ->
-                        ConversationSummary(
-                            id = conv.id,
-                            title = conv.title,
-                            updatedAt = conv.updatedAt
-                        )
-                    })
-                }
+            networkMonitor.observeNetwork().collect { setState { copy(isOnline = it) } }
+        }
+        viewModelScope.launch {
+            getConversationsUseCase().collect { convs ->
+                setState { copy(conversations = convs.map { ConversationSummary(it.id, it.title, it.updatedAt) }) }
             }
         }
     }
@@ -55,102 +48,49 @@ class ChatViewModel @Inject constructor(
         when (intent) {
             is ChatIntent.UpdateInput -> setState { copy(inputText = intent.text) }
             ChatIntent.SendMessage -> sendMessage()
-            ChatIntent.TapMicrophone -> startVoiceInput()
+            ChatIntent.TapMicrophone -> {
+                if (!state.value.isOnline) { setState { copy(showNetworkError = true) }; return }
+                startVoiceInput()
+            }
             is ChatIntent.OnSpeechResult -> onSpeechResult(intent.text)
             ChatIntent.DismissError -> setState { copy(error = null) }
             is ChatIntent.SelectConversation -> selectConversation(intent.id)
             is ChatIntent.DeleteConversation -> deleteConversation(intent.id)
-            is ChatIntent.NewConversation -> setState {
-                copy(currentConversationId = null, messages = fakeMessages, inputText = "")
-            }
+            is ChatIntent.NewConversation -> setState { copy(currentConversationId = null, messages = fakeMessages, inputText = "") }
+            ChatIntent.DismissNetworkError -> setState { copy(showNetworkError = false) }
         }
     }
 
     private fun sendMessage() {
         val text = state.value.inputText.trim()
         if (text.isEmpty()) return
-
+        if (!state.value.isOnline) { setState { copy(showNetworkError = true) }; return }
         setState { copy(inputText = "", isLoading = true, error = null) }
-
         viewModelScope.launch {
-            val conversationId = state.value.currentConversationId
-                ?: createNewConversation(text) ?: return@launch
-
-            val result = actionEngine.processUserMessage(
-                userMessage = text,
-                model = DEFAULT_MODEL,
-                history = state.value.messages.map { msg ->
-                    DomainChatMessage(
-                        id = msg.id,
-                        role = if (msg.isUser) MessageRole.USER else MessageRole.ASSISTANT,
-                        content = msg.text,
-                        model = DEFAULT_MODEL,
-                        timestamp = 0
-                    )
-                }
-            )
-
-            saveAssistantResponseUseCase(
-                conversationId = conversationId,
-                content = result.response,
-                model = DEFAULT_MODEL
-            )
-
-            val currentMessages = state.value.messages.toMutableList()
-            currentMessages.add(
-                ChatMessage(
-                    id = "user_${System.currentTimeMillis()}",
-                    text = text,
-                    isUser = true,
-                    timestamp = formatTimestamp(System.currentTimeMillis())
-                )
-            )
-            currentMessages.add(
-                ChatMessage(
-                    id = "ai_${System.currentTimeMillis()}",
-                    text = result.response,
-                    isUser = false,
-                    timestamp = formatTimestamp(System.currentTimeMillis())
-                )
-            )
-
-            setState {
-                copy(isLoading = false, messages = currentMessages)
-            }
+            val cid = state.value.currentConversationId ?: createNewConversation(text) ?: return@launch
+            val result = actionEngine.processUserMessage(text, MODEL, state.value.messages.map {
+                Dm(it.id, if (it.isUser) MessageRole.USER else MessageRole.ASSISTANT, it.text, MODEL, 0)
+            })
+            saveAssistantResponseUseCase(cid, result.response, MODEL)
+            val msgs = state.value.messages.toMutableList()
+            msgs.add(ChatMessage("u_${System.currentTimeMillis()}", text, true, fmtTime(System.currentTimeMillis())))
+            msgs.add(ChatMessage("a_${System.currentTimeMillis()}", result.response, false, fmtTime(System.currentTimeMillis())))
+            setState { copy(isLoading = false, messages = msgs) }
         }
     }
 
-    private suspend fun createNewConversation(firstMessage: String): String? {
-        val title = if (firstMessage.length > 30) firstMessage.take(30) + "..." else firstMessage
-        return when (val result = createConversationUseCase(title, DEFAULT_MODEL)) {
-            is Result.Success -> {
-                val id = result.data.id
-                setState { copy(currentConversationId = id) }
-                listenToMessages(id)
-                id
-            }
-            is Result.Error -> {
-                setState { copy(error = result.exception?.message ?: "Unknown error", isLoading = false) }
-                null
-            }
+    private suspend fun createNewConversation(msg: String): String? {
+        val t = if (msg.length > 30) msg.take(30) + "..." else msg
+        return when (val r = createConversationUseCase(t, MODEL)) {
+            is Result.Success -> { val id = r.data.id; setState { copy(currentConversationId = id) }; listenToMessages(id); id }
+            is Result.Error -> { setState { copy(error = r.exception?.message ?: "Error", isLoading = false) }; null }
         }
     }
 
-    private fun listenToMessages(conversationId: String) {
+    private fun listenToMessages(cid: String) {
         viewModelScope.launch {
-            getMessagesUseCase(conversationId).collect { domainMessages ->
-                setState {
-                    copy(
-                        messages = domainMessages.map { msg ->
-                            ChatMessage(
-                                id = msg.id,
-                                text = msg.content,
-                                isUser = msg.role == MessageRole.USER,
-                                timestamp = formatTimestamp(msg.timestamp)
-                            )
-                        }
-                    )
-                }
+            getMessagesUseCase(cid).collect { ms ->
+                setState { copy(messages = ms.map { ChatMessage(it.id, it.content, it.role == MessageRole.USER, fmtTime(it.timestamp)) }) }
             }
         }
     }
@@ -158,8 +98,8 @@ class ChatViewModel @Inject constructor(
     private fun startVoiceInput() {
         setState { copy(isListening = true) }
         speechManager.startListening(
-            onResult = { text -> handleIntent(ChatIntent.OnSpeechResult(text)) },
-            onError = { error -> setState { copy(error = error, isListening = false) } }
+            onResult = { handleIntent(ChatIntent.OnSpeechResult(it)) },
+            onError = { setState { copy(error = it, isListening = false) } }
         )
     }
 
@@ -168,20 +108,11 @@ class ChatViewModel @Inject constructor(
         handleIntent(ChatIntent.SendMessage)
     }
 
-    private fun selectConversation(id: String) {
-        setState { copy(currentConversationId = id) }
-        listenToMessages(id)
-    }
+    private fun selectConversation(id: String) { setState { copy(currentConversationId = id) }; listenToMessages(id) }
+    private fun deleteConversation(id: String) { viewModelScope.launch { deleteConversationUseCase(id) } }
 
-    private fun deleteConversation(id: String) {
-        viewModelScope.launch {
-            deleteConversationUseCase(id)
-        }
-    }
-
-    private fun formatTimestamp(timestamp: Long): String {
-        if (timestamp == 0L) return ""
-        val sdf = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
-        return sdf.format(java.util.Date(timestamp))
+    private fun fmtTime(ts: Long): String {
+        if (ts == 0L) return ""
+        return java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date(ts))
     }
 }

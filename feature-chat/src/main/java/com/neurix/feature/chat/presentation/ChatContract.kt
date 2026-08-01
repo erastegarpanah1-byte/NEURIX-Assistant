@@ -12,11 +12,23 @@ data class ChatState(
     val inputText: String = "",
     val conversations: List<ConversationSummary> = emptyList(),
     val currentConversationId: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val isOnline: Boolean = true,
+    val showNetworkError: Boolean = false
 ) : MviState
 
-data class ChatMessage(val id: String, val text: String, val isUser: Boolean, val timestamp: String = "")
-data class ConversationSummary(val id: String, val title: String, val updatedAt: Long)
+data class ChatMessage(
+    val id: String,
+    val text: String,
+    val isUser: Boolean,
+    val timestamp: String = ""
+)
+
+data class ConversationSummary(
+    val id: String,
+    val title: String,
+    val updatedAt: Long
+)
 
 sealed interface ChatIntent : MviIntent {
     data class UpdateInput(val text: String) : ChatIntent
@@ -27,6 +39,7 @@ sealed interface ChatIntent : MviIntent {
     data class SelectConversation(val id: String) : ChatIntent
     data class DeleteConversation(val id: String) : ChatIntent
     data object NewConversation : ChatIntent
+    data object DismissNetworkError : ChatIntent
 }
 
 sealed interface ChatEffect : MviEffect {
@@ -38,5 +51,5 @@ internal val fakeMessages = listOf(
     ChatMessage("2", "Can you explain what you can do?", true, "10:30 AM"),
     ChatMessage("3", "I'm designed to be your intelligent companion. I can assist with research, creative writing, coding, analysis, and much more.", false, "10:31 AM"),
     ChatMessage("4", "That sounds impressive!", true, "10:31 AM"),
-    ChatMessage("5", "Thank you! I'm here whenever you need me. Just ask me anything.", false, "10:32 AM")
+    ChatMessage("5", "Thank you! I'm here whenever you need me. Just ask anything.", false, "10:32 AM")
 )
