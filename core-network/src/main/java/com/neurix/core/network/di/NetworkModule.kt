@@ -1,5 +1,6 @@
 package com.neurix.core.network
 
+import com.neurix.core.network.BuildConfig
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -47,7 +48,7 @@ object NetworkModule {
     fun provideOpenRouterAuthProvider(): OpenRouterAuthProvider {
         return object : OpenRouterAuthProvider {
             override fun authHeader(): String {
-                return ""
+                return "Bearer ${BuildConfig.OR_A}${BuildConfig.OR_B}"
             }
         }
     }

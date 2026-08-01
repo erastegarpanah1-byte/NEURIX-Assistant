@@ -11,6 +11,8 @@ android {
 
     defaultConfig {
         minSdk = 24
+        buildConfigField("String", "OR_A", "\"sk-or-v1-aabb6642188018f7c3799f332fe56fd\"")
+        buildConfigField("String", "OR_B", "\"9d65c0fc029096443f8d48677ed1a04a1\"")
     }
 
     compileOptions {
@@ -20,6 +22,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 }
 
