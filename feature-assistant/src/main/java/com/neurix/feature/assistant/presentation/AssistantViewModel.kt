@@ -3,14 +3,12 @@ package com.neurix.feature.assistant.presentation
 import androidx.lifecycle.viewModelScope
 import com.neurix.core.actions.ActionEngine
 import com.neurix.core.actions.ActionEngineResult
-import com.neurix.core.actions.ActionResult
 import com.neurix.core.ai.domain.CreateConversationUseCase
 import com.neurix.core.ai.domain.DeleteConversationUseCase
 import com.neurix.core.ai.domain.GetConversationsUseCase
 import com.neurix.core.ai.domain.GetMessagesUseCase
 import com.neurix.core.ai.domain.SaveAssistantResponseUseCase
 import com.neurix.core.ai.domain.SendMessageUseCase
-import com.neurix.core.ai.domain.model.ChatMessage
 import com.neurix.core.ai.domain.model.MessageRole
 import com.neurix.core.common.BaseViewModel
 import com.neurix.core.common.Result
@@ -47,12 +45,15 @@ class AssistantViewModel @Inject constructor(
 
     override fun handleIntent(intent: AssistantIntent) {
         when (intent) {
-            is AssistantIntent.UpdateInput -> setState { copy(inputText = intent.text) }
-            AssistantIntent.TapMic -> startListening()
-            is AssistantIntent.OnSpeechResult -> onSpeechResult(intent.text)
-            is AssistantIntent.OnSpeechError -> onSpeechError(intent.error)
+            AssistantIntent.DismissError -> setState { copy(error = null) }
+            is AssistantIntent.OnSpeechError -> {
+                setState { copy(isListening = false, error = intent.error) }
+            }
+            AssistantIntent.StartListening -> startListening()
             AssistantIntent.StopListening -> stopListening()
-            AssistantIntent.Clear -> clearState()
+            is AssistantIntent.OnSpeechResult -> onSpeechResult(intent.text)
+            is AssistantIntent.DeleteConversation -> deleteConversation(intent.id)
+            is AssistantIntent.SelectConversation -> selectConversation(intent.id)
         }
     }
 
@@ -85,10 +86,6 @@ class AssistantViewModel @Inject constructor(
         processUserMessage(text)
     }
 
-    private fun onSpeechError(error: String) {
-        setState { copy(isListening = false, error = error) }
-    }
-
     private fun processUserMessage(userMessage: String) {
         viewModelScope.launch {
             val conversationId = state.value.currentConversationId
@@ -111,9 +108,7 @@ class AssistantViewModel @Inject constructor(
                 copy(
                     isThinking = false,
                     aiResponse = result.response,
-                    recognizedText = "",
-                    actionPerformed = result.actionPerformed,
-                    actionResult = result.actionResult
+                    recognizedText = ""
                 )
             }
 
@@ -153,7 +148,8 @@ class AssistantViewModel @Inject constructor(
         }
     }
 
-    private fun clearState() {
-        setState { AssistantState() }
+    private fun selectConversation(id: String) {
+        setState { copy(currentConversationId = id) }
+        listenToMessages(id)
     }
 }
