@@ -9,15 +9,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object WakeWordModule {
-
-    @Provides
-    @Singleton
-    fun provideWakeWordEngine(): WakeWordEngine {
-        return object : WakeWordEngine {
-            override fun startListening(onWakeWord: () -> Unit, onError: (String) -> Unit) {}
-            override fun stopListening() {}
-            override fun isActive(): Boolean = false
-            override fun destroy() {}
-        }
-    }
+    @Provides @Singleton
+    fun provideWakeWordEngine(engine: PorcupineWakeWordEngine): WakeWordEngine = engine
 }
