@@ -32,9 +32,7 @@ class WakeWordService : Service() {
     }
 
     private fun startListening() {
-        try {
-            speechRecognizer?.destroy()
-        } catch (_: Exception) {}
+        try { speechRecognizer?.destroy() } catch (_: Exception) {}
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
         val ri = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -43,12 +41,8 @@ class WakeWordService : Service() {
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
         }
         speechRecognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
-            override fun onResults(r: Bundle?) {
-                checkResults(r); restartAfter(100)
-            }
-            override fun onPartialResults(r: Bundle?) {
-                if (checkResults(r)) { speechRecognizer?.stopListening() }
-            }
+            override fun onResults(r: Bundle?) { checkResults(r); restartAfter(100) }
+            override fun onPartialResults(r: Bundle?) { if (checkResults(r)) speechRecognizer?.stopListening() }
             override fun onError(error: Int) { restartAfter(2000) }
             override fun onReadyForSpeech(p: Bundle?) {}
             override fun onBeginningOfSpeech() {}
@@ -64,9 +58,7 @@ class WakeWordService : Service() {
         val matches = r?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return false
         for (text in matches) {
             val t = text.lowercase()
-            if (t.contains("neurix") || t.contains("nerix") || t.contains("nurix")) {
-                onWakeWordDetected(); return true
-            }
+            if (t.contains("neurix") || t.contains("nerix") || t.contains("nurix")) { onWake(); return true }
         }
         return false
     }
@@ -75,17 +67,10 @@ class WakeWordService : Service() {
         if (isRestarting) return
         isRestarting = true
         try { speechRecognizer?.destroy() } catch (_: Exception) {}
-        android.os.Handler(mainLooper).postDelayed({
-            isRestarting = false
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                if (!isDestroyed && !isFinishing) startListening()
-            } else {
-                startListening()
-            }
-        }, delayMs)
+        android.os.Handler(mainLooper).postDelayed({ isRestarting = false; startListening() }, delayMs)
     }
 
-    private fun onWakeWordDetected() {
+    private fun onWake() {
         val intent = Intent(this, OverlayService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
     }
