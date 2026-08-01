@@ -41,4 +41,14 @@ object NetworkModule {
     fun provideOpenRouterApi(retrofit: Retrofit): OpenRouterApi {
         return retrofit.create(OpenRouterApi::class.java)
     }
+
+    @Provides
+    @Singleton
+    fun provideOpenRouterAuthProvider(): OpenRouterAuthProvider {
+        return object : OpenRouterAuthProvider {
+            override fun authHeader(): String {
+                return ""
+            }
+        }
+    }
 }
