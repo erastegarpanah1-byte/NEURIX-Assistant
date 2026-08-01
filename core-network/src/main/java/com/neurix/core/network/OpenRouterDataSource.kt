@@ -25,17 +25,17 @@ class OpenRouterDataSource @Inject constructor(
             )
             val response: Response<OpenRouterResponse> = api.sendMessage(
                 auth = authProvider.authHeader(),
-                body = request
+                request = request
             )
             if (response.isSuccessful && response.body() != null) {
                 Result.Success(response.body()!!)
             } else {
                 Result.Error(
-                    Exception("API error: ${response.code()} ${response.message()}")
+                    message = "API error: ${response.code()} ${response.message()}"
                 )
             }
         } catch (e: Exception) {
-            Result.Error(e)
+            Result.Error(message = e.message ?: "Unknown error", exception = e)
         }
     }
 }

@@ -45,7 +45,7 @@ class ChatRepository @Inject constructor(
             conversationDao.insertConversation(entity)
             Result.Success(entity.toDomain())
         } catch (e: Exception) {
-            Result.Error(e)
+            Result.Error(e.message ?: "", e)
         }
     }
 
@@ -72,7 +72,7 @@ class ChatRepository @Inject constructor(
             )
             Result.Success(entity.toDomain())
         } catch (e: Exception) {
-            Result.Error(e)
+            Result.Error(e.message ?: "", e)
         }
     }
 
@@ -81,7 +81,7 @@ class ChatRepository @Inject constructor(
             conversationDao.deleteConversation(conversationId)
             Result.Success(Unit)
         } catch (e: Exception) {
-            Result.Error(e)
+            Result.Error(e.message ?: "", e)
         }
     }
 
