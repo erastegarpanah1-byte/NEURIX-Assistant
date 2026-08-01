@@ -6,7 +6,6 @@ import com.neurix.core.ai.domain.model.MessageRole
 import com.neurix.core.common.Result
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
-import com.neurix.core.actions.executors.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -55,23 +54,51 @@ class ActionEngine @Inject constructor(
                             actionResult = actionResult
                         )
                     } else {
-                        ActionEngineResult(response = rawResponse, actionPerformed = false)
+                        ActionEngineResult(
+                            response = rawResponse,
+                            actionPerformed = false
+                        )
                     }
                 } else {
-                    ActionEngineResult(response = rawResponse, actionPerformed = false)
+                    ActionEngineResult(
+                        response = rawResponse,
+                        actionPerformed = false
+                    )
                 }
             }
             is Result.Error -> ActionEngineResult(
                 response = "Sorry, I couldn't process that request.",
                 actionPerformed = false,
-                error = result.exception
+                error = result.exception as? Exception
             )
         }
     }
 
     private fun buildSystemPrompt(): String {
         val actions = registry.getActionDescriptions()
-        return "You are Neurix, a personal AI assistant for Android. Available actions:\n$actions\n\nWhen the user asks you to perform an action, respond with ACTION: <action_name>\nPARAMS: key1=value1, key2=value2\nIf just chatting, respond naturally. Be helpful, concise, and friendly."
+        return """
+You are Neurix, a personal AI assistant for Android. You can help with conversations AND execute actions.
+
+Available actions:
+${actions}
+
+When the user asks you to perform one of these actions, respond in this format:
+ACTION: <action_name>
+PARAMS: key1=value1, key2=value2
+
+For flashlight: ACTION: flashlight (no params needed)
+For opening YouTube: ACTION: open_youtube
+For settings: ACTION: open_settings
+For web search: ACTION: search_web
+PARAMS: query=<search term>
+For setting alarm: ACTION: set_alarm
+PARAMS: time=HH:MM, message=<optional>
+For making a call: ACTION: make_call
+PARAMS: number=<phone number>
+
+If the user is just having a conversation with no action, respond naturally.
+Always be helpful, concise, and friendly.
+        """.trimIndent()
     }
 
     private fun parseActionResponse(response: String): ParsedAction? {
@@ -80,12 +107,15 @@ class ActionEngine @Inject constructor(
         val action = actionLine.removePrefix("ACTION:").trim()
         val paramsLine = lines.find { it.startsWith("PARAMS:") }
         val params = if (paramsLine != null) {
-            paramsLine.removePrefix("PARAMS:").trim()
-                .split(",").mapNotNull { part ->
-                    val eq = part.indexOf("=")
-                    if (eq > 0) part.substring(0, eq).trim() to part.substring(eq + 1).trim() else null
-                }.toMap()
-        } else emptyMap()
+            val paramsStr = paramsLine.removePrefix("PARAMS:").trim()
+            paramsStr.split(",").mapNotNull { part ->
+                val eq = part.indexOf("=")
+                if (eq > 0) part.substring(0, eq).trim() to part.substring(eq + 1).trim()
+                else null
+            }.toMap()
+        } else {
+            emptyMap()
+        }
         return ParsedAction(action, params)
     }
 }
@@ -98,4 +128,7 @@ data class ActionEngineResult(
     val error: Exception? = null
 )
 
-private data class ParsedAction(val action: String, val params: Map<String, String>)
+private data class ParsedAction(
+    val action: String,
+    val params: Map<String, String>
+)
