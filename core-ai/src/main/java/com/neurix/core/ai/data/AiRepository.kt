@@ -32,7 +32,10 @@ class AiRepository @Inject constructor(
                     ?: ""
                 Result.Success(content)
             }
-            is Result.Error -> Result.Error(result.exception.message ?: "", result.exception)
+            is Result.Error -> {
+                val msg = result.exception?.message ?: "Unknown error"
+                Result.Error(msg, result.exception)
+            }
         }
     }
 }
