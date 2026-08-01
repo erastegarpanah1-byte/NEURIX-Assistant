@@ -13,11 +13,10 @@ import android.os.IBinder
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.FrameLayout
-import androidx.compose.ui.platform.ComposeView
-import com.neurix.app.MainActivity
-import com.neurix.feature.assistant.presentation.FloatingAssistantOverlay
-import com.neurix.core.design.NeurixTheme
-import com.neurix.core.design.NeurixSystemUi
+import android.widget.TextView
+import android.widget.LinearLayout
+import android.graphics.Color
+import android.widget.Button
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -47,8 +46,54 @@ class OverlayService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS,
             PixelFormat.TRANSLUCENT
         ).apply { gravity = Gravity.CENTER }
+
         ov = FrameLayout(this)
-        ov?.addView(ComposeView(this).apply { setContent { NeurixTheme { NeurixSystemUi(); FloatingAssistantOverlay(onDismiss = { close() }) } } })
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.argb(180, 0, 0, 0))
+            gravity = android.view.Gravity.CENTER
+        }
+
+        content.addView(TextView(this).apply {
+            text = "Neurix"
+            textSize = 28f
+            setTextColor(Color.WHITE)
+            gravity = android.view.Gravity.CENTER
+            setPadding(0, 0, 0, 40)
+        })
+
+        content.addView(TextView(this).apply {
+            text = "Hey! I'm listening..."
+            textSize = 16f
+            setTextColor(Color.argb(180, 255, 255, 255))
+            gravity = android.view.Gravity.CENTER
+            setPadding(0, 0, 0, 32)
+        })
+
+        content.addView(Button(this).apply {
+            text = "Open Neurix"
+            textSize = 18f
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#7C3AED"))
+            setPadding(48, 24, 48, 24)
+            setOnClickListener {
+                val intent = Intent(this@OverlayService, com.neurix.app.MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    putExtra("from_assistant", true)
+                }
+                startActivity(intent)
+            }
+        })
+
+        content.addView(Button(this).apply {
+            text = "Close"
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.TRANSPARENT)
+            setOnClickListener { close() }
+        })
+
+        ov?.addView(content)
         wm.addView(ov, p)
     }
 
@@ -61,13 +106,17 @@ class OverlayService : Service() {
 
     private fun createChannel() {
         (getSystemService(NotificationManager::class.java)).createNotificationChannel(
-            NotificationChannel("nrnx_ov", "Neurix Assistant", NotificationManager.IMPORTANCE_LOW).apply { description = "Neurix is active" }
+            NotificationChannel("nrnx_ov", "Neurix Assistant", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Neurix is active"
+            }
         )
     }
 
     private fun notif(): Notification {
         val pi = PendingIntent.getActivity(this, 0,
-            Intent(this, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK },
+            Intent(this, com.neurix.app.MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return Notification.Builder(this, "nrnx_ov")
