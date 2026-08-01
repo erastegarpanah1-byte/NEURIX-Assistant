@@ -65,7 +65,7 @@ fun ChatScreen(onNavigateBack: () -> Unit, viewModel: ChatViewModel = hiltViewMo
 fun MessageBubble(message: ChatMessage) {
     Row(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(0.dp, if (message.isUser) Alignment.End else Alignment.Start)
+        horizontalArrangement = if (message.isUser) Arrangement.End else Arrangement.Start
     ) {
         if (!message.isUser) {
             Box(Modifier.size(32.dp).clip(CircleShape).background(Brush.linearGradient(listOf(NeurixColors.Primary, NeurixColors.Secondary))))
