@@ -11,7 +11,7 @@
         android:name=".NeurixApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="Neurix"
         android:supportsRtl="true"
         android:theme="@style/Theme.Neurix">
         <activity
@@ -31,7 +31,9 @@
             <intent-filter>
                 <action android:name="android.service.voice.VoiceInteractionService" />
             </intent-filter>
-            <meta-data android:name="android.voice_interaction" android:resource="@xml/voice_interaction_service" />
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/voice_interaction_service" />
         </service>
         <service
             android:name="com.neurix.core.service.WakeWordService"
